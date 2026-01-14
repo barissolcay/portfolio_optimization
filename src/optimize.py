@@ -287,24 +287,15 @@ def risk_parity_weights(
     max_weight: float = DEFAULT_MAX_WEIGHT
 ) -> Tuple[np.ndarray, float, bool]:
     """
-    Risk Parity (Eşit Risk Katkısı) portföyü oluşturur.
-    
-    Risk Parity nedir?
-    - Her varlığın portföy riskine katkısı eşit olacak şekilde ağırlıklandırma
-    - Mean-Variance'a alternatif, tahmin hatasına daha az hassas
-    
-    Basitleştirilmiş yaklaşım (Inverse Volatility):
-    w_i ∝ 1 / σ_i
-    
-    Ekonometrist notu: Risk Parity, beklenen getiri tahmini gerektirmez,
-    bu nedenle tahmin hatasına daha dayanıklıdır.
+    Risk Parity (Esit Risk Katkisi) portfoyu olusturur.
+    Her varligin portfoy riskine katkisi esit olacak sekilde agirliklandirir.
     
     Args:
         cov_matrix: Kovaryans matrisi
-        max_weight: Maksimum ağırlık limiti
+        max_weight: Maksimum agirlik limiti
     
     Returns:
-        Tuple: (ağırlıklar, volatilite, başarılı_mı)
+        Tuple: (agirliklar, volatilite, basarili_mi)
     """
     n_assets = cov_matrix.shape[0]
     
@@ -449,24 +440,16 @@ def calculate_risk_contribution(
     cov_matrix: np.ndarray
 ) -> np.ndarray:
     """
-    Her varlığın portföy riskine katkısını hesaplar.
-    
-    Formül:
-    RC_i = w_i × (Σ × w)_i / σ_p
-    
-    Marginal Risk Contribution × Weight = Risk Contribution
-    
-    Ekonometrist notu: Risk katkısı analizi, portföy riskinin 
-    kaynağını anlamak için kritik öneme sahiptir.
+    Her varligin portfoy riskine katkisini hesaplar.
     
     Args:
-        weights: Portföy ağırlıkları
+        weights: Portfoy agirliklari
         cov_matrix: Kovaryans matrisi
     
     Returns:
-        Risk katkıları (toplamı 1 olacak şekilde normalize)
+        Risk katkilari (toplami 1 olacak sekilde normalize)
     """
-    # Portföy varyansı
+    # Portfoy varyansi
     port_var = weights @ cov_matrix @ weights
     port_vol = np.sqrt(port_var)
     
@@ -512,14 +495,8 @@ def get_risk_contribution_summary(
     return df
 
 
-# =============================================================================
-# DUYARLILIK ANALİZİ (EKONOMETRİST ÖNERİSİ)
-# =============================================================================
-# Bu fonksiyonlar, ekonometristin önerisiyle eklendi.
-# Amacı: Parametre seçimlerinin sonuçlara etkisini analiz etmek.
-# Neden önemli: Sonuçların parametre seçimine ne kadar duyarlı olduğunu bilmek,
-# modelin güvenilirliği hakkında fikir verir.
-# =============================================================================
+# Duyarlilik Analizi Fonksiyonlari
+# Parametre secimlerinin sonuclara etkisini analiz eder
 
 
 def max_weight_sensitivity_analysis(
@@ -529,25 +506,13 @@ def max_weight_sensitivity_analysis(
     risk_free_rate: float = DEFAULT_RISK_FREE_RATE
 ) -> pd.DataFrame:
     """
-    Maksimum ağırlık parametresinin sonuçlara etkisini analiz eder.
-    
-    Bu analiz, max_weight parametresinin portföy performansını
-    nasıl etkilediğini gösterir.
-    
-    NEDEN ÖNEMLİ?
-    - max_weight çok düşükse: Aşırı çeşitlendirme, optimal olmayabilir
-    - max_weight çok yüksekse: Tek hisseye aşırı bağımlılık
-    - Sonuçlar parametre seçimine çok duyarlıysa: Model güvenilmez
-    
-    Ekonometrist notu: "Eğer max_weight değişince Sharpe oranı çok
-    dalgalanıyorsa, optimizasyon sonuçları tahmin hatasına hassas
-    demektir. Bu durumda daha konservatif yaklaşım önerilir."
+    Maksimum agirlik parametresinin sonuclara etkisini analiz eder.
     
     Args:
         expected_returns: Beklenen getiriler
         cov_matrix: Kovaryans matrisi
-        weight_range: Test edilecek max_weight değerleri
-        risk_free_rate: Risksiz faiz oranı
+        weight_range: Test edilecek max_weight degerleri
+        risk_free_rate: Risksiz faiz orani
     
     Returns:
         Sensitivity analizi DataFrame'i
@@ -589,19 +554,16 @@ def generate_sensitivity_report(
     risk_free_rate: float = DEFAULT_RISK_FREE_RATE
 ) -> dict:
     """
-    Kapsamlı duyarlılık analiz raporu oluşturur.
-    
-    Bu rapor, ekonometristin parametre seçimleri hakkındaki
-    değerlendirmesini destekler.
+    Duyarlilik analiz raporu olusturur.
     
     Args:
         expected_returns: Beklenen getiriler
         cov_matrix: Kovaryans matrisi
         asset_names: Hisse isimleri
-        risk_free_rate: Risksiz faiz oranı
+        risk_free_rate: Risksiz faiz orani
     
     Returns:
-        Analiz sonuçları sözlüğü
+        Analiz sonuclari sozlugu
     """
     # max_weight duyarlılık analizi
     sensitivity_df = max_weight_sensitivity_analysis(
@@ -628,20 +590,13 @@ def generate_sensitivity_report(
         "en_kotu_sharpe": sensitivity_df.loc[worst_idx, "sharpe"],
     }
     
-    # ekonomik yorum
+    # yorum olustur
     if sharpe_range > 0.3:
-        report["yorum"] = ("⚠️ Yüksek duyarlılık tespit edildi! "
-                          f"Sharpe oranı max_weight'e göre {sharpe_range:.2f} oranında değişiyor. "
-                          "Ekonometrist notu: Sonuçlar parametre seçimine çok bağımlı. "
-                          "Daha konservatif bir max_weight seçilmeli veya robust optimizasyon düşünülmeli.")
+        report["yorum"] = f"⚠️ Yüksek duyarlılık! Sharpe oranı {sharpe_range:.2f} oranında değişiyor."
     elif sharpe_range > 0.15:
-        report["yorum"] = ("ℹ️ Orta düzeyde duyarlılık. "
-                          f"Sharpe oranı {sharpe_range:.2f} oranında değişiyor. "
-                          "Ekonometrist notu: Parametre seçimi önemli, dikkatli olunmalı.")
+        report["yorum"] = f"ℹ️ Orta düzeyde duyarlılık. Sharpe oranı {sharpe_range:.2f} oranında değişiyor."
     else:
-        report["yorum"] = ("✓ Düşük duyarlılık, stabil sonuçlar. "
-                          f"Sharpe oranı sadece {sharpe_range:.2f} oranında değişiyor. "
-                          "Ekonometrist notu: Optimizasyon sonuçları güvenilir.")
+        report["yorum"] = f"✓ Düşük duyarlılık. Sharpe oranı {sharpe_range:.2f} oranında değişiyor."
     
     return report
 

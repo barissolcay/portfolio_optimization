@@ -1,13 +1,7 @@
 """
 Getiri Hesaplama ve Kovaryans Modülü
 ====================================
-Bu modül fiyat verilerinden getiri hesaplar ve
-Ledoit-Wolf shrinkage kovaryans tahmini yapar.
-
-Ekonometrist Kararı:
-- Log getiri kullanılıyor (basit getiri yerine)
-- Kovaryans için Ledoit-Wolf shrinkage tercih edildi
-- Yıllıklaştırma 252 işlem günü üzerinden yapılıyor
+Fiyat verilerinden getiri hesaplama ve kovaryans tahmini.
 """
 
 import numpy as np
@@ -28,11 +22,6 @@ def calculate_log_returns(prices: pd.DataFrame) -> pd.DataFrame:
     Logaritmik (log) getiri hesaplar.
     
     Formül: r_t = ln(P_t / P_{t-1})
-    
-    Neden log getiri?
-    - Ekonometri literatüründe yaygın tercih
-    - Zaman açısından toplanabilir (additivity) özelliği var
-    - Normal dağılıma daha yakın davranır
     
     Args:
         prices: Fiyat DataFrame'i (index=tarih, kolonlar=hisseler)
@@ -56,9 +45,6 @@ def calculate_simple_returns(prices: pd.DataFrame) -> pd.DataFrame:
     
     Formül: r_t = (P_t - P_{t-1}) / P_{t-1}
     
-    NOT: Bu fonksiyon karşılaştırma için var.
-    Ana hesaplamalarda log getiri kullanıyoruz.
-    
     Args:
         prices: Fiyat DataFrame'i
     
@@ -76,10 +62,6 @@ def annualize_return(daily_returns: pd.Series) -> float:
     Günlük getiriyi yıllık getiriye çevirir.
     
     Formül: r_yillik = r_gunluk * 252
-    
-    NOT: Log getiri için basit çarpım yeterli.
-    Basit getiri için (1+r)^252 - 1 kullanılır ama
-    biz log getiri kullandığımız için bu formül geçerli.
     
     Args:
         daily_returns: Günlük getiri serisi
@@ -117,12 +99,6 @@ def estimate_covariance_sample(returns: pd.DataFrame) -> np.ndarray:
     """
     Örnek (sample) kovaryans matrisi hesaplar.
     
-    Bu klasik yöntemdir ama dezavantajı var:
-    - Az veri ile güvenilir değil
-    - Optimizasyon aşırı ağırlıklara yol açabilir
-    
-    Biz Ledoit-Wolf kullanıyoruz ama karşılaştırma için bu fonksiyon var.
-    
     Args:
         returns: Getiri DataFrame'i
     
@@ -135,14 +111,6 @@ def estimate_covariance_sample(returns: pd.DataFrame) -> np.ndarray:
 def estimate_covariance_ledoit_wolf(returns: pd.DataFrame) -> Tuple[np.ndarray, float]:
     """
     Ledoit-Wolf shrinkage kovaryans tahmini.
-    
-    Neden Ledoit-Wolf?
-    - Sample kovaryans tahmin hatasına hassas
-    - Az veri ile aşırı ağırlıklı portföylere yol açar
-    - Ledoit-Wolf, sample kovaryansı yapılandırılmış bir tahminciye "büzer" (shrink)
-    - Sonuç daha stabil ve güvenilir ağırlıklar verir
-    
-    Referans: Ledoit & Wolf (2004) - Journal of Multivariate Analysis
     
     Args:
         returns: Getiri DataFrame'i (satırlar=günler, kolonlar=hisseler)
@@ -158,8 +126,6 @@ def estimate_covariance_ledoit_wolf(returns: pd.DataFrame) -> Tuple[np.ndarray, 
     cov_matrix = lw.covariance_
     shrinkage = lw.shrinkage_
     
-    logger.debug(f"Ledoit-Wolf shrinkage katsayısı: {shrinkage:.4f}")
-    
     return cov_matrix, shrinkage
 
 
@@ -168,9 +134,6 @@ def calculate_expected_returns(returns: pd.DataFrame) -> np.ndarray:
     Beklenen getirileri hesaplar (yıllık).
     
     Basit yöntem: Geçmiş ortalama getiri
-    
-    NOT: Bu naif bir tahmin. Gerçek dünyada daha sofistike
-    yöntemler kullanılır ama MVP için yeterli.
     
     Args:
         returns: Günlük getiri DataFrame'i
@@ -233,13 +196,8 @@ def prepare_returns_for_optimization(
     return returns, expected_returns, cov_matrix_annual
 
 
-# =============================================================================
-# DİNAMİK ANALİZ FONKSİYONLARI (EKONOMETRİST ÖNERİSİ)
-# =============================================================================
-# Bu fonksiyonlar, ekonometristin önerisiyle eklendi.
-# Amacı: Korelasyon ve volatilitenin zaman içinde nasıl değiştiğini analiz etmek.
-# Neden önemli: Sabit kovaryans varsayımı gerçek piyasalarda geçerli değildir.
-# =============================================================================
+# Dinamik analiz fonksiyonlari
+# Korelasyon ve volatilitenin zaman icinde nasil degistigini analiz eder
 
 
 def calculate_rolling_volatility(
@@ -248,19 +206,7 @@ def calculate_rolling_volatility(
 ) -> pd.DataFrame:
     """
     Rolling (hareketli) volatilite hesaplar.
-    
-    Bu analiz, volatilitenin zaman içinde nasıl değiştiğini gösterir.
-    Piyasa stresi dönemlerinde volatilite yükselir - buna "volatilite
-    kümelenmesi" (volatility clustering) denir.
-    
-    NEDEN ÖNEMLİ?
-    - Sabit volatilite varsayımı gerçekçi değil
-    - Kriz dönemlerinde risk artar
-    - Portföy ağırlıkları buna göre ayarlanmalı
-    
-    Ekonometrist notu: "Eğer rolling volatilite çok dalgalıysa,
-    sabit kovaryans temelli optimizasyon yetersiz kalabilir.
-    Bu durumda GARCH tabanlı modeller düşünülmelidir."
+    Volatilitenin zaman icinde nasil degistigini gosterir.
     
     Args:
         returns: Getiri DataFrame'i
@@ -284,18 +230,7 @@ def calculate_rolling_correlation(
 ) -> pd.DataFrame:
     """
     Rolling (hareketli) korelasyon hesaplar.
-    
-    Bu analiz, hisse senetleri arasındaki korelasyonun zaman içinde
-    nasıl değiştiğini gösterir.
-    
-    NEDEN ÖNEMLİ?
-    - Kriz dönemlerinde korelasyonlar yükselir ("correlation breakdown")
-    - Normal dönemde düşük korelasyonlu hisseler, krizde birlikte düşer
-    - Çeşitlendirme faydası tam olarak anlaşılamaz
-    
-    Ekonometrist notu: "Eğer kriz dönemlerinde korelasyonlar sıçrıyorsa,
-    normal dönem verileriyle yapılan optimizasyon yanıltıcı olabilir.
-    Stres testi veya regime-switching modeller düşünülmelidir."
+    Hisseler arasindaki korelasyonun zaman icinde nasil degistigini gosterir.
     
     Args:
         returns: Getiri DataFrame'i
@@ -341,19 +276,7 @@ def detect_correlation_regimes(
 ) -> pd.Series:
     """
     Korelasyon rejimlerini tespit eder.
-    
-    Bu fonksiyon, piyasanın "normal" mi yoksa "stres" döneminde mi
-    olduğunu korelasyon seviyelerine göre belirler.
-    
-    REJİMLER:
-    - Düşük korelasyon (< 0.3): Normal dönem, çeşitlendirme etkili
-    - Orta korelasyon (0.3-0.6): Geçiş dönemi
-    - Yüksek korelasyon (> 0.6): Stres dönemi, dikkatli ol!
-    
-    Ekonometrist notu: "Yüksek korelasyon dönemlerinde yapılan
-    optimizasyon sonuçları daha güvenilirdir çünkü kötü senaryoyu
-    yansıtır. Düşük korelasyon dönemlerinde ise çeşitlendirme
-    faydası abartılı görünebilir."
+    Piyasanin normal mi stres doneminde mi oldugunu belirler.
     
     Args:
         rolling_corr: Rolling ortalama korelasyon serisi
@@ -381,10 +304,7 @@ def detect_correlation_regimes(
 
 def generate_correlation_report(returns: pd.DataFrame, window: int = 60) -> dict:
     """
-    Kapsamlı korelasyon analiz raporu oluşturur.
-    
-    Bu rapor, ekonometristin korelasyon dinamikleri hakkındaki
-    değerlendirmesini destekler.
+    Korelasyon analiz raporu olusturur.
     
     Args:
         returns: Getiri DataFrame'i
@@ -411,18 +331,15 @@ def generate_correlation_report(returns: pd.DataFrame, window: int = 60) -> dict
         "regimes_series": regimes
     }
     
-    # ekonomik yorum
+    # yorum olustur
     if report["yuksek_korelasyon_orani"] > 30:
-        report["yorum"] = ("⚠️ Yüksek korelasyon dönemi oranı %30'un üzerinde. "
-                          "Çeşitlendirme faydası sınırlı olabilir. "
-                          "Ekonometrist notu: Stres dönemi verileri ağırlıklı.")
+        report["yorum"] = ("⚠️ Yüksek korelasyon oranı. "
+                          "Çeşitlendirme faydası sınırlı olabilir.")
     elif report["volatilite_korelasyon"] > 0.15:
         report["yorum"] = ("⚠️ Korelasyon volatilitesi yüksek. "
-                          "Piyasa rejim değişimleri yaşamış. "
-                          "Ekonometrist notu: Sabit kovaryans varsayımı zayıf.")
+                          "Piyasa rejim değişimleri yaşamış.")
     else:
-        report["yorum"] = ("✓ Korelasyon yapısı nispeten stabil. "
-                          "Ekonometrist notu: Optimizasyon sonuçları güvenilir.")
+        report["yorum"] = "✓ Korelasyon yapısı stabil."
     
     return report
 

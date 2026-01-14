@@ -25,21 +25,8 @@ from dataclasses import dataclass
 @dataclass
 class VaRResult:
     """
-    VaR hesaplama sonuçları.
-    
-    Bu dataclass, VaR analizinin tüm sonuçlarını bir arada tutar.
-    İki ayrı test içerir:
-    1. Kupiec POF Testi: İhlal sayısı beklenen düzeyde mi?
-    2. Christoffersen Testi: İhlaller birbirinden bağımsız mı?
-    
-    Neden iki test?
-    - Kupiec sadece frekansı kontrol eder
-    - Christoffersen ardışık ihlalleri (clustering) tespit eder
-    - İkisi birlikte modelin güvenilirliğini tam olarak değerlendirir
-    
-    Ekonometrist notu: "VaR modelinin sadece doğru oranda ihlal üretmesi
-    yetmez, ihlallerin rastgele dağılması da gerekir. Ardışık ihlaller
-    (clustering) varsa, model kötü dönemleri öngöremiyor demektir."
+    VaR hesaplama sonuclari.
+    Kupiec ve Christoffersen testlerini icerir.
     """
     var_value: float              # VaR degeri (negatif sayi)
     confidence: float             # guven duzeyi (örn: 0.95)
@@ -193,27 +180,11 @@ def kupiec_pof_test(
 
 def christoffersen_independence_test(violations: pd.Series) -> Tuple[float, float, bool]:
     """
-    Christoffersen Independence (Bağımsızlık) Testi.
-    
-    Bu test, VaR ihlallerinin birbirinden BAĞIMSIZ olup olmadığını kontrol eder.
-    Kupiec testi sadece ihlal SAYISINI kontrol ederken, bu test ihlallerin
-    DAĞILIMINI test eder.
-    
-    NEDEN ÖNEMLİ?
-    - Ardışık ihlaller (clustering) varsa, model kötü dönemleri öngöremiyor demek
-    - Örnek: 5 ihlal var, ama hepsi aynı hafta içinde → Tehlikeli!
-    - Normal dağılım: İhlaller rastgele dağılmalı
-    
-    YÖNTEM (Markov Chain):
-    - Bugün ihlal olup olmadığı, dünkü duruma bağlı mı?
-    - Transition matrix: P(bugün ihlal | dünkü durum)
-    - Eğer dünkü durum önemliyse → Bağımsızlık yok → Model zayıf
-    
-    Referans: Christoffersen (1998) - "Evaluating Interval Forecasts"
-    Journal of Business & Economic Statistics
+    Christoffersen Bagimsizlik Testi.
+    VaR ihlallerinin birbirinden bagimsiz olup olmadigini kontrol eder.
     
     Args:
-        violations: Boolean ihlal serisi (True = ihlal günü)
+        violations: Boolean ihlal serisi (True = ihlal gunu)
     
     Returns:
         Tuple: (test_istatistigi, p_value, gecti_mi)
@@ -305,22 +276,11 @@ def joint_var_test(
     christoffersen_stat: float
 ) -> Tuple[float, float, bool]:
     """
-    Birleşik (Joint) VaR Testi.
-    
-    Kupiec ve Christoffersen testlerini birleştirir.
-    
-    NEDEN BİRLEŞİK TEST?
-    - Kupiec: İhlal sayısı doğru mu?
-    - Christoffersen: İhlaller bağımsız mı?
-    - İkisi de geçmeli → Model gerçekten güvenilir
-    
-    Ekonometrist notu: "Sadece Kupiec testi yeterli değil. Bir model
-    doğru sayıda ihlal üretebilir ama ihlaller kötü dönemlerde
-    kümeleniyorsa, risk yönetimi için kullanılamaz."
+    Birlesik VaR Testi. Kupiec ve Christoffersen testlerini birlestirir.
     
     Args:
-        kupiec_stat: Kupiec test istatistiği
-        christoffersen_stat: Christoffersen test istatistiği
+        kupiec_stat: Kupiec test istatistigi
+        christoffersen_stat: Christoffersen test istatistigi
     
     Returns:
         Tuple: (joint_stat, p_value, gecti_mi)
@@ -475,19 +435,11 @@ def generate_risk_report(
     confidence_levels: list = [0.90, 0.95, 0.99]
 ) -> pd.DataFrame:
     """
-    Farklı güven düzeyleri için kapsamlı risk raporu oluşturur.
-    
-    Bu rapor üç ayrı testi tek tabloda gösterir:
-    - Kupiec POF: İhlal sayısı kontrolü
-    - Christoffersen: Bağımsızlık kontrolü  
-    - Birleşik: Final değerlendirme
-    
-    Ekonometrist notu: "VaR modelinin güvenilirliği için
-    hem frekans hem de bağımsızlık testlerinden geçmesi gerekir."
+    Farkli guven duzeyleri icin risk raporu olusturur.
     
     Args:
-        returns: Günlük getiri serisi
-        confidence_levels: Test edilecek güven düzeyleri
+        returns: Gunluk getiri serisi
+        confidence_levels: Test edilecek guven duzeyleri
     
     Returns:
         Risk raporu DataFrame'i
@@ -563,36 +515,27 @@ def interpret_var_result(result: VaRResult) -> str:
                     f"(p-value = {result.kupiec_pvalue:.4f} < 0.05). "
                     f"VaR tahminleri dikkatle değerlendirilmelidir.")
     
-    # 4. Christoffersen testi yorumu (YENİ - ekonometrist katkısı!)
+    # 4. Christoffersen testi yorumu
     if result.christoffersen_passed:
-        lines.append(f"✓ Christoffersen Bağımsızlık Testi: İhlaller birbirinden bağımsız "
-                    f"dağılmıştır (p-value = {result.christoffersen_pvalue:.4f} > 0.05). "
-                    f"Volatilite kümelenmesi gözlemlenmemiştir.")
+        lines.append(f"✓ Christoffersen Bagimsizlik Testi: Ihlaller bagimsiz dagilmis "
+                    f"(p-value = {result.christoffersen_pvalue:.4f} > 0.05).")
     else:
-        lines.append(f"✗ Christoffersen Bağımsızlık Testi: İhlallerde kümelenme (clustering) "
-                    f"tespit edilmiştir (p-value = {result.christoffersen_pvalue:.4f} < 0.05). "
-                    f"Model kötü dönemleri öngörmede başarısızdır. "
-                    f"Ekonometrist notu: Ardışık ihlaller, modelin volatilite "
-                    f"rejimlerini yakalayamadığını göstermektedir.")
+        lines.append(f"✗ Christoffersen Bagimsizlik Testi: Ihlallerde kumelenme "
+                    f"tespit edilmistir (p-value = {result.christoffersen_pvalue:.4f} < 0.05).")
     
-    # 5. Birleşik test yorumu
+    # 5. Birlesik test yorumu
     if result.joint_passed:
-        lines.append(f"🏆 Birleşik Test Sonucu: VaR modeli hem ihlal sayısı hem de "
-                    f"bağımsızlık açısından BAŞARILI bulunmuştur. "
-                    f"Risk yönetimi için güvenle kullanılabilir.")
+        lines.append(f"Birlesik Test Sonucu: VaR modeli BASARILI bulunmustur.")
     else:
         if result.kupiec_passed and not result.christoffersen_passed:
-            lines.append(f"⚠️ Birleşik Test Sonucu: İhlal sayısı doğru ancak ihlaller "
-                        f"bağımsız değil. Model volatilite kümelenmesi dönemlerinde "
-                        f"güncellenmeli veya GARCH tabanlı VaR düşünülmelidir.")
+            lines.append(f"⚠️ Birlesik Test Sonucu: Ihlal sayisi dogru ancak ihlaller "
+                        f"bagimsiz degil. Model guncellenmeli.")
         elif not result.kupiec_passed and result.christoffersen_passed:
-            lines.append(f"⚠️ Birleşik Test Sonucu: İhlaller bağımsız ancak sayı tutarsız. "
-                        f"VaR güven düzeyi veya hesaplama penceresi gözden geçirilmelidir.")
+            lines.append(f"⚠️ Birlesik Test Sonucu: Ihlaller bagimsiz ancak sayi tutarsiz. "
+                        f"VaR guven duzeyi gozden gecirilmeli.")
         else:
-            lines.append(f"❌ Birleşik Test Sonucu: Model her iki testte de başarısız. "
-                        f"Risk modeli kapsamlı bir şekilde revize edilmelidir. "
-                        f"Ekonometrist önerisi: Alternatif risk ölçütleri (CVaR, ES) "
-                        f"veya farklı modelleme yaklaşımları değerlendirilmelidir.")
+            lines.append(f"❌ Birlesik Test Sonucu: Model her iki testte de basarisiz. "
+                        f"Risk modeli revize edilmelidir.")
     
     return "\n\n".join(lines)
 
