@@ -1,0 +1,24 @@
+# Akıllı Portföy Optimizasyon & Risk Dashboard
+# Python Bağımlılıkları
+
+# Veri çekme
+yfinance>=0.2.18
+
+# Veri manipülasyonu ve hesaplama
+pandas>=2.0.0
+numpy>=1.24.0
+
+# Optimizasyon
+scipy>=1.10.0
+
+# Ledoit-Wolf kovaryans tahmini
+scikit-learn>=1.2.0
+
+# Dashboard arayüzü
+streamlit>=1.28.0
+
+# İnteraktif grafikler
+plotly>=5.15.0
+
+# Excel export (opsiyonel)
+openpyxl>=3.1.0
