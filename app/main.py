@@ -23,16 +23,17 @@ from src.data import fetch_stock_data, get_cached_tickers, BENCHMARK_SYMBOL
 from src.returns import (
     calculate_log_returns, estimate_covariance_ledoit_wolf,
     calculate_expected_returns, calculate_correlation_matrix,
+    generate_correlation_report, calculate_rolling_volatility,
     TRADING_DAYS_PER_YEAR
 )
 from src.optimize import (
     minimize_variance, maximize_sharpe, equal_weight_portfolio,
     calculate_efficient_frontier, get_risk_contribution_summary,
-    DEFAULT_RISK_FREE_RATE
+    generate_sensitivity_report, DEFAULT_RISK_FREE_RATE
 )
 from src.backtest import (
     BacktestConfig, walk_forward_backtest, run_backtest_comparison,
-    calculate_drawdown
+    calculate_drawdown, identify_stress_periods_in_data, calculate_stress_period_metrics
 )
 from src.risk import (
     generate_var_analysis, generate_risk_report, interpret_var_result,
@@ -43,8 +44,9 @@ from src.risk import (
 from app.components import (
     render_summary_panel, render_backtest_chart, render_drawdown_chart,
     render_weights_chart, render_risk_contribution_chart, render_var_chart,
-    render_efficient_frontier, render_correlation_heatmap, render_metrics_table,
-    render_metrics_explanation
+    render_efficient_frontier, render_correlation_heatmap, render_rolling_correlation_chart,
+    render_metrics_table, render_metrics_explanation, render_stress_test_panel,
+    render_sensitivity_chart, render_rolling_volatility_chart
 )
 
 
@@ -335,7 +337,14 @@ if run_button or st.session_state.get("run"):
             st.plotly_chart(render_backtest_chart(backtest_results, BENCHMARK_SYMBOL), use_container_width=True)
             
             st.markdown(render_metrics_explanation())
-            st.dataframe(render_metrics_table(backtest_results, BENCHMARK_SYMBOL), use_container_width=True)
+            
+            show_net = st.checkbox("🔍 İşlem Maliyetlerini Dahil Et (Net Performans)", value=False)
+            st.dataframe(render_metrics_table(backtest_results, BENCHMARK_SYMBOL, show_net=show_net), use_container_width=True)
+            
+            if show_net:
+                costs = backtest_results["optimized"].get("transaction_costs", {})
+                if costs:
+                    st.info(f"💾 **İşlem Maliyeti Özeti (Optimize):** Toplam %{costs['total_cost']*100:.2f} maliyet, {costs['n_rebalances']} adet rebalance işlemi.")
             
             with st.expander("📉 Drawdown Analizi (En Kötü Dönemler)"):
                 st.markdown("""
@@ -345,6 +354,34 @@ if run_button or st.session_state.get("run"):
                 Bu grafik, yatırımcının "en zor dönemlerde" ne kadar kayıp yaşayacağını gösterir.
                 """)
                 st.plotly_chart(render_drawdown_chart(backtest_results, calculate_drawdown, BENCHMARK_SYMBOL), use_container_width=True)
+            
+            with st.expander("🔥 Stres Testi (Kriz Dönemleri Analizi)"):
+                st.markdown("""
+                **Stres Testi nedir?** Portföyün geçmişteki büyük kriz dönemlerinde (COVID-19, 2022 Ayı Piyasası vb.) nasıl davrandığını ölçer.
+                
+                Bu analiz, portföyün "en zor zamanlarda" ne kadar dayanıklı olduğunu görmenizi sağlar.
+                """)
+                
+                # Optimized getiri serisini al
+                opt_returns_bt = pd.read_json(StringIO(backtest_results["optimized"]["daily_returns"]), typ="series")
+                
+                # Stres dönemlerini veri içinde bul
+                stress_periods = identify_stress_periods_in_data(opt_returns_bt)
+                
+                # Her dönem için metrikleri hesapla
+                stress_results = {}
+                for name, info in stress_periods.items():
+                    metrics = calculate_stress_period_metrics(
+                        opt_returns_bt, 
+                        info["actual_start"], 
+                        info["actual_end"],
+                        risk_free_rate=risk_free_rate
+                    )
+                    if metrics:
+                        metrics["description"] = info["description"]
+                        stress_results[name] = metrics
+                
+                render_stress_test_panel(stress_results)
         
         # TAB 2: RISK
         with tab2:
@@ -438,6 +475,26 @@ if run_button or st.session_state.get("run"):
                     ),
                     use_container_width=True
                 )
+            
+            with st.expander("🧪 Duyarlılık Analizi (Model Kararlılığı)"):
+                st.markdown("""
+                **Duyarlılık Analizi nedir?** "Max Ağırlık" parametresini değiştirdiğinizde portföyün ne kadar değiştiğini ölçer.
+                
+                Eğer küçük bir değişim çok büyük fark yaratıyorsa, model kararsız olabilir. Stabil modellerde eğri pürüzsüzdür.
+                """)
+                
+                sens_report = generate_sensitivity_report(
+                    expected_ret, cov_annual, 
+                    stock_prices.columns.tolist(),
+                    risk_free_rate=risk_free_rate
+                )
+                
+                # Grafik
+                st.plotly_chart(render_sensitivity_chart(sens_report["sensitivity_df"]), use_container_width=True)
+                
+                # Yorum
+                st.info(f"💡 **Analiz Notu:** {sens_report['yorum']}")
+                st.write(f"Sharpe oranı değişim aralığı: {sens_report['sharpe_range']:.3f}")
         
         # TAB 4: KORELASYON
         with tab4:
@@ -470,6 +527,43 @@ if run_button or st.session_state.get("run"):
                 st.info(f"ℹ️ Ortalama korelasyon: {avg_corr:.2f} (orta düzey)")
             else:
                 st.success(f"✓ Ortalama korelasyon düşük ({avg_corr:.2f}). İyi çeşitlendirme!")
+            
+            # --- YENİ: ROLLING KORELASYON ANALİZİ ---
+            st.divider()
+            st.subheader("📈 Dinamik Korelasyon Analizi")
+            st.markdown("""
+            **Neden Önemli?** Korelasyonlar sabit değildir. Kriz dönemlerinde hisseler arasındaki korelasyon genellikle artar.
+            Bu grafik, 63 günlük hareketli pencerelerle ortalama korelasyonun zaman içindeki değişimini gösterir.
+            """)
+            
+            corr_report = generate_correlation_report(returns, window=63)
+            
+            # Grafik
+            st.plotly_chart(render_rolling_correlation_chart(corr_report["rolling_corr_series"]), use_container_width=True)
+            
+            # Rapor Metrikleri
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Ortalama", f"{corr_report['ortalama_korelasyon']:.2f}")
+            with col2:
+                st.metric("Minimum", f"{corr_report['min_korelasyon']:.2f}")
+            with col3:
+                st.metric("Maksimum", f"{corr_report['max_korelasyon']:.2f}")
+            with col4:
+                st.metric("Yüksek Kor. Oranı", f"%{corr_report['yuksek_korelasyon_orani']:.0f}")
+            
+            st.info(f"💡 **Analiz Notu:** {corr_report['yorum']}")
+            
+            # --- YENİ: ROLLING VOLATİLİTE ---
+            st.divider()
+            st.subheader("📈 Dinamik Volatilite (Risk) Analizi")
+            st.markdown("""
+            **Bu grafik ne gösteriyor?** Hisse senetlerinin risk seviyelerinin (volatilite) zaman içindeki değişimini gösterir.
+            Yukarı giden çizgiler riskin arttığını, aşağı gidenler ise piyasanın sakinleştiğini gösterir.
+            """)
+            
+            rolling_vol = calculate_rolling_volatility(returns, window=21)
+            st.plotly_chart(render_rolling_volatility_chart(rolling_vol), use_container_width=True)
         
         # =====================
         # EXPORT

@@ -20,12 +20,9 @@ TRADING_DAYS_PER_YEAR = 252
 def calculate_log_returns(prices: pd.DataFrame) -> pd.DataFrame:
     """
     Logaritmik (log) getiri hesaplar.
-    
     Formül: r_t = ln(P_t / P_{t-1})
-    
     Args:
         prices: Fiyat DataFrame'i (index=tarih, kolonlar=hisseler)
-    
     Returns:
         Günlük log getiriler
     """
@@ -35,7 +32,6 @@ def calculate_log_returns(prices: pd.DataFrame) -> pd.DataFrame:
     
     # ilk satir NaN olacak (onceki gun yok), onu kaldir
     log_returns = log_returns.dropna()
-    
     return log_returns
 
 

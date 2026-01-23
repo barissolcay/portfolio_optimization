@@ -591,15 +591,53 @@ def render_correlation_heatmap(corr_matrix: pd.DataFrame):
     return fig
 
 
-def render_metrics_table(backtest_results: dict, benchmark_symbol: str = "SPY"):
+def render_rolling_correlation_chart(rolling_corr: pd.Series):
+    """Rolling korelasyon grafiği."""
+    fig = go.Figure()
+    
+    # Ortalama çizgi
+    fig.add_trace(go.Scatter(
+        x=rolling_corr.index, 
+        y=rolling_corr.values,
+        mode="lines",
+        name="Ort. Korelasyon",
+        line=dict(color="#1f77b4", width=2)
+    ))
+    
+    # Eşik değerleri (Renkli bölgeler)
+    # Yüksek korelasyon (> 0.6) - Kırmızı bölge
+    fig.add_hrect(y0=0.6, y1=1.0, fillcolor="red", opacity=0.1, line_width=0, annotation_text="Yüksek Korelasyon", annotation_position="top left")
+    
+    # Düşük korelasyon (< 0.3) - Yeşil bölge
+    fig.add_hrect(y0=-1.0, y1=0.3, fillcolor="green", opacity=0.1, line_width=0, annotation_text="Düşük Korelasyon", annotation_position="bottom left")
+    
+    fig.update_layout(
+        title="Rolling Korelasyon Analizi (63 Gün)",
+        xaxis_title="Tarih",
+        yaxis_title="Korelasyon",
+        yaxis=dict(range=[-0.2, 1.0]),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        template="plotly_white",
+        height=400
+    )
+    
+    return fig
+
+
+def render_metrics_table(backtest_results: dict, benchmark_symbol: str = "SPY", show_net: bool = False):
     """Performans metrikleri tablosu."""
     names = {"optimized": "Optimize", "equal_weight": "Eşit Ağırlık", "risk_parity": "Risk Parity", "benchmark": f"Benchmark ({benchmark_symbol})"}
     
     rows = []
     for strat_name, data in backtest_results.items():
-        m = data["metrics"].copy()
-        m["strateji"] = names.get(strat_name, strat_name)
-        rows.append(m)
+        if show_net and "net_metrics" in data and data["net_metrics"]:
+            m = data["net_metrics"].copy()
+            m["strateji"] = names.get(strat_name, strat_name) + " (Net)"
+            rows.append(m)
+        else:
+            m = data["metrics"].copy()
+            m["strateji"] = names.get(strat_name, strat_name)
+            rows.append(m)
     
     df = pd.DataFrame(rows).set_index("strateji")
     
@@ -627,3 +665,87 @@ def render_metrics_explanation():
     - **MaxDD:** En kötü dönemdeki düşüş. **-%20'den fazlası dikkat!**
     - **Gün:** Toplam işlem günü sayısı
     """
+
+
+def render_stress_test_panel(stress_results: dict):
+    """Kriz dönemleri analiz tablosu."""
+    if not stress_results:
+        st.info("Bu veri aralığında tanımlı kriz dönemi bulunamadı.")
+        return
+    
+    # DataFrame'e dönüştür
+    rows = []
+    for period_name, metrics in stress_results.items():
+        row = {
+            "Kriz Dönemi": period_name,
+            "Açıklama": metrics["description"],
+            "Dönem Getirisi": f"{metrics['toplam_getiri']*100:.2f}%",
+            "Max Drawdown": f"{metrics['max_drawdown']*100:.2f}%",
+            "En Kötü Gün": f"{metrics['en_kotu_gun']*100:.2f}%",
+            "En İyi Gün": f"{metrics['en_iyi_gun']*100:.2f}%",
+            "Gün": metrics["gun_sayisi"]
+        }
+        rows.append(row)
+    
+    df = pd.DataFrame(rows)
+    st.table(df)
+
+
+def render_sensitivity_chart(sensitivity_df: pd.DataFrame):
+    """Duyarlılık analizi grafiği (Sharpe vs Max Weight)."""
+    fig = go.Figure()
+    
+    # Sharpe Oranı Çizgisi
+    fig.add_trace(go.Scatter(
+        x=sensitivity_df["max_weight"],
+        y=sensitivity_df["sharpe"],
+        mode="lines+markers",
+        name="Sharpe Oranı",
+        line=dict(color="#2ca02c", width=3),
+        marker=dict(size=10)
+    ))
+    
+    # Konsantrasyon (Max Actual Weight) Çizgisi
+    fig.add_trace(go.Scatter(
+        x=sensitivity_df["max_weight"],
+        y=sensitivity_df["en_buyuk_agirlik"],
+        mode="lines+markers",
+        name="Gerçek Max Ağırlık",
+        line=dict(color="#d62728", width=2, dash="dash"),
+        marker=dict(size=8)
+    ))
+    
+    fig.update_layout(
+        title="Duyarlılık Analizi: Parametre Etkisi",
+        xaxis_title="Belirlenen Max Ağırlık Limiti",
+        yaxis_title="Değer",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        template="plotly_white",
+        height=450
+    )
+    
+    return fig
+
+
+def render_rolling_volatility_chart(rolling_vol: pd.DataFrame):
+    """Rolling volatilite grafiği."""
+    fig = go.Figure()
+    
+    for col in rolling_vol.columns:
+        fig.add_trace(go.Scatter(
+            x=rolling_vol.index,
+            y=rolling_vol[col],
+            mode="lines",
+            name=col
+        ))
+    
+    fig.update_layout(
+        title="Rolling Volatilite (21 Gün)",
+        xaxis_title="Tarih",
+        yaxis_title="Yıllıklandırılmış Volatilite",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        template="plotly_white",
+        height=400
+    )
+    
+    return fig

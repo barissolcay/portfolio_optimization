@@ -53,18 +53,14 @@ def calculate_historical_var(
 ) -> float:
     """
     Historical simulation yöntemiyle VaR hesaplar.
-    
     Bu yöntem:
     - Geçmiş getirileri sıralar
     - Belirtilen yüzdelik dilimi bulur
     - O değeri VaR olarak raporlar
-    
     Örnek: %95 VaR için en kötü %5'lik dilimin sınırını buluruz.
-    
     Args:
         returns: Günlük getiri serisi
         confidence: Güven düzeyi (varsayılan 0.95 = %95)
-    
     Returns:
         VaR değeri (negatif bir sayı, kayıp olduğu için)
     """
@@ -73,7 +69,6 @@ def calculate_historical_var(
     
     # getirilerin alpha yuzdelik dilimi
     var = np.percentile(returns, alpha * 100)
-    
     return var
 
 
@@ -546,17 +541,13 @@ def calculate_expected_shortfall(
 ) -> float:
     """
     Expected Shortfall (CVaR) hesaplar.
-    
     ES, VaR eşiğini aşan kayıpların ortalamasıdır.
     VaR'dan daha iyi bir risk ölçüsü olarak kabul edilir
     çünkü kuyruk riskini daha iyi yakalar.
-    
     NOT: Bu fonksiyon MVP için opsiyonel, nice-to-have özellik.
-    
     Args:
         returns: Günlük getiri serisi
         confidence: Güven düzeyi
-    
     Returns:
         Expected Shortfall değeri
     """
@@ -567,7 +558,6 @@ def calculate_expected_shortfall(
     
     if len(tail_losses) == 0:
         return var
-    
     return tail_losses.mean()
 
 
